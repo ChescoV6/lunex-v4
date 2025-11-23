@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Editor</title>
+
+<style>
+    :root {
+        --bg-dark: rgb(20,20,20);
+        --bg-mid: rgb(25,25,25);
+        --accent: #6495ed;
+        --accent-soft: #3f65aa;
+    }
+
+    html, body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background: var(--bg-dark);
+        color: #fff;
+        font-family: Consolas, "Poppins", monospace;
+        overflow: hidden;
+    }
+
+    #layout {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+    }
+
+    #container {
+        width: 100%;
+        height: 100%;
+        background: var(--bg-dark);
+        overflow: hidden;
+    }
+
+    .squiggly-error {
+        text-decoration: underline wavy #ff4a4a;
+        transition: all 0.2s ease-in-out;
+    }
+
+    /* Add smooth fade on selection */
+    .monaco-editor .selected-text {
+        transition: background-color 0.25s ease, color 0.25s ease;
+    }
+
+    /* Smooth folding animation */
+    .monaco-editor .view-overlays {
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+</style>
+
+<script src="vs/loader.js"></script>
+</head>
+<body>
+
+<div id="layout">
+    <div id="container"></div>
+</div>
+
+<script>
+require.config({ paths: { 'vs': 'vs' } });
+
+let editor;
+let Proposals = [];
+
+/* ============================
+   LOAD MONACO EDITOR
+============================ */
+require(["vs/editor/editor.main"], function () {
+
+    /* CUSTOM THEME */
+    monaco.editor.defineTheme('DarkChesco', {
+        base: "vs-dark",
+        inherit: true,
+        rules: [
+            { token: "keyword", foreground: "6495ed" },
+            { token: "string", foreground: "a9c4f5" },
+            { token: "comment", foreground: "777777", fontStyle: "italic" },
+            { token: "number", foreground: "f08080" },
+            { token: "variable", foreground: "ffffff" }
+        ],
+        colors: {
+            "editor.background": "#141414",
+            "editor.lineHighlightBackground": "#191919",
+            "editor.selectionBackground": "#2c2c2c",
+            "editorCursor.foreground": "#ffffff",
+            "editorLineNumber.foreground": "#666666",
+            "minimap.background": "#191919"
+        }
+    });
+
+    editor = monaco.editor.create(document.getElementById("container"), {
+        value: 'print("Made by Chesco")',
+        language: "lua",
+        theme: "DarkChesco",
+
+        /* MINIMAP & SCROLL */
+        minimap: { enabled: true },
+        scrollbar: {
+            vertical: "hidden",
+            horizontal: "hidden",
+            handleMouseWheel: true,
+            useShadows: false
+        },
+
+        /* ENHANCED ANIMATIONS */
+        smoothScrolling: true,
+        scrollBeyondLastLine: true,
+        cursorSmoothCaretAnimation: true,
+        cursorBlinking: "smooth",
+        renderLineHighlight: "all",
+        lineHeight: 22,
+        fontSize: 14,
+        fontLigatures: true,
+        automaticLayout: true,
+        renderWhitespace: "none",
+        folding: true,
+        selectionHighlight: true,
+        overviewRulerLanes: 3,
+    });
+
+    editor.getModel().updateOptions({ insertSpaces: true });
+
+    /* INTELLISENSE */
+    monaco.languages.registerCompletionItemProvider("lua", {
+        provideCompletionItems: () => ({ suggestions: Proposals })
+    });
+
+    /* Smooth animation for decorations */
+    const originalDeltaDecorations = editor.deltaDecorations.bind(editor);
+    editor.deltaDecorations = (oldDecorations, newDecorations) => {
+        newDecorations.forEach(d => {
+            if (!d.options.inlineClassName) return;
+            const el = document.querySelector(`.${d.options.inlineClassName}`);
+            if (el) el.style.transition = "all 0.25s ease-in-out";
+        });
+        return originalDeltaDecorations(oldDecorations, newDecorations);
+    };
+});
+
+/* ============================
+   INTELLISENSE API
+============================ */
+function AddIntellisense(label, kindName, detail, insert) {
+    const kinds = monaco.languages.CompletionItemKind;
+    Proposals.push({
+        label,
+        kind: kinds[kindName] || kinds.Function,
+        detail,
+        insertText: insert
+    });
+}
+
+function AddSnippet(kind, name, data) {
+    Proposals.push({
+        label: name,
+        kind: monaco.languages.CompletionItemKind[kind],
+        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+        insertText: Array.isArray(data.insertText) ? data.insertText.join("\n") : data.insertText,
+        ...data
+    });
+}
+
+function AddRawSnippet(obj) {
+    Proposals.push(obj);
+}
+
+/* ============================
+   ERROR HIGHLIGHTING
+============================ */
+function ShowError(line, col, endline, endcol, msg) {
+    editor.revealPositionInCenter({ lineNumber: line, column: col });
+    editor.deltaDecorations([], [{
+        range: new monaco.Range(line, col, endline, endcol),
+        options: {
+            inlineClassName: "squiggly-error",
+            hoverMessage: { value: msg }
+        }
+    }]);
+}
+
+/* ============================
+   GET/SET TEXT
+============================ */
+function GetText() { return editor.getValue(); }
+function SetText(t) { editor.setValue(t); }
+
+</script>
+
+</body>
+</html>
